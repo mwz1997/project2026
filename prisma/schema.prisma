@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CandidateProfile {
+  id                String   @id @default(cuid())
+  resumeFilename    String?
+  sourceFileType    String?
+  rawResumeText     String
+  skills            String[]
+  roles             String[]
+  industries        String[]
+  tools             String[]
+  education         String[]
+  domains           String[]
+  yearsExperience   Int?
+  seniorityEstimate String?
+  parseConfidence   Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model UserPreferences {
+  id                  String   @id @default(cuid())
+  targetRoles         String[]
+  industries          String[]
+  locations           String[]
+  remotePolicy        String?
+  salaryMin           Int?
+  sponsorshipRequired Boolean  @default(false)
+  seniority           String?
+  keywordsInclude     String[]
+  keywordsExclude     String[]
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model JobSource {
+  id               String          @id @default(cuid())
+  name             String
+  type             String
+  baseUrl          String
+  enabled          Boolean         @default(true)
+  fetchStrategy    String?
+  selectorConfig   Json?
+  lastFetchedAt    DateTime?
+  lastFetchStatus  String?
+  lastFetchMessage String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  rawJobPostings   RawJobPosting[]
+}
+
+model RawJobPosting {
+  id             String        @id @default(cuid())
+  sourceId       String
+  sourceJobId    String?
+  url            String
+  rawTitle       String
+  rawCompany     String
+  rawLocation    String?
+  rawDescription String
+  postedAtRaw    String?
+  fetchedAt      DateTime      @default(now())
+  contentHash    String        @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  source         JobSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  normalizedJob  NormalizedJob?
+
+  @@unique([sourceId, url])
+}
+
+model NormalizedJob {
+  id                 String          @id @default(cuid())
+  rawJobPostingId    String          @unique
+  titleNormalized    String
+  company            String
+  locationNormalized String?
+  remoteType         String?
+  skillsRequired     String[]
+  skillsPreferred    String[]
+  industry           String?
+  seniority          String?
+  sponsorshipStatus  String          @default("unknown")
+  salaryMin          Int?
+  salaryMax          Int?
+  postedAt           DateTime?
+  parseConfidence    Float?
+  status             String          @default("active")
+  confidenceFlags    String[]
+  hiddenMatch        Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  rawJobPosting      RawJobPosting   @relation(fields: [rawJobPostingId], references: [id], onDelete: Cascade)
+  matchResult        MatchResult?
+  feedbackEvents     FeedbackEvent[]
+
+  @@index([company, titleNormalized])
+}
+
+model MatchResult {
+  id              String        @id @default(cuid())
+  normalizedJobId String        @unique
+  pipelineRunId   String?
+  matchScore      Int
+  confidenceScore Int
+  urgencyScore    Int
+  bucket          String
+  scoreBreakdown  Json
+  fitSummary      String
+  missingSkills   String[]
+  reasoning       String[]
+  blockingReasons String[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  normalizedJob   NormalizedJob @relation(fields: [normalizedJobId], references: [id], onDelete: Cascade)
+  pipelineRun     PipelineRun?  @relation(fields: [pipelineRunId], references: [id], onDelete: SetNull)
+}
+
+model FeedbackEvent {
+  id              String        @id @default(cuid())
+  normalizedJobId String
+  feedbackType    String
+  createdAt       DateTime      @default(now())
+  normalizedJob   NormalizedJob @relation(fields: [normalizedJobId], references: [id], onDelete: Cascade)
+}
+
+model PipelineRun {
+  id          String        @id @default(cuid())
+  trigger     String
+  status      String
+  startedAt   DateTime      @default(now())
+  finishedAt  DateTime?
+  jobsFetched Int           @default(0)
+  jobsParsed  Int           @default(0)
+  jobsScored  Int           @default(0)
+  message     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  matchResults MatchResult[]
+}
